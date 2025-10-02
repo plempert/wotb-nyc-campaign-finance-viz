@@ -1,32 +1,37 @@
+# import pathlib
+
+# src = pathlib.Path("2009_Contributions.csv")
+# dst = pathlib.Path("2009_Contributions_.csv")
+
+# # Try common legacy encodings in order
+# for enc in ("utf-8-sig", "latin-1", "cp1252", "utf-16", "utf-16-le", "utf-16-be"):
+#     try:
+#         text = src.read_text(encoding=enc)
+#         dst.write_text(text, encoding="utf-8")
+#         print(f"Decoded with {enc} → wrote UTF-8")
+#         break
+#     except UnicodeDecodeError:
+#         continue
+# else:
+#     raise RuntimeError("Could not decode file with common encodings")
+
+
+
+
 import streamlit as st
 import pandas as pd
 import duckdb
 
-##############
-# SELECTIONS #
-##############
+st.set_page_config(page_title="NYC Campaign Finance")
+
+##################
+# YEAR SELECTION #
+##################
 
 year = st.selectbox(
     "Select year",
-    ("2025", "2023", "2017"),
+    ("2025", "2023", "2021", "2017", "2013", "2009")
 )
-
-offices = {
-    "1": "Mayor",
-    "2": "Public Advocate",
-    "3": "Comptroller",
-    "4": "Borough President",
-    "5": "City Council",
-    "IS": "PACs, LLCs, and other Independent Spenders"
-}
-
-office = st.selectbox(
-    "Select office",
-    list(offices.keys()),
-    format_func=lambda x: offices[x]
-)
-
-st.set_page_config(page_title="NYC Campaign Finance")
 
 ###################
 # CONNECT TO FILE #
@@ -37,9 +42,39 @@ contributions_url = f"{year}_Contributions.csv"
 
 con.execute(f"""
     CREATE OR REPLACE TABLE contrib AS 
-    SELECT * FROM read_csv_auto('{contributions_url}', header=True)
+    SELECT * FROM read_csv_auto('{contributions_url}', header=True, sample_size = -1)
 """)
 
+#################
+# SELECT OFFICE #
+#################
+
+present_office_codes = con.execute("""
+SELECT DISTINCT CAST(OFFICECD AS VARCHAR) AS OFFICECD FROM contrib          
+""").df()["OFFICECD"].tolist()
+
+print(f"present_office_codes = {present_office_codes}")
+
+all_offices = {
+    "1": "Mayor",
+    "2": "Public Advocate",
+    "3": "Comptroller",
+    "4": "Borough President",
+    "5": "City Council",
+    "IS": "PACs, LLCs, and other Independent Spenders"
+}
+
+offices = {}
+desired_order = ["1", "2", "3", "4", "5", "IS"]
+for code in desired_order:
+    if code in present_office_codes:
+        offices[code] = all_offices[code]
+
+office = st.selectbox(
+    "Select office",
+    list(offices.keys()),
+    format_func=lambda x: offices[x]
+)
 
 ###################################
 # TOP CONTRIBUTIONS BY RECIPIENT #
@@ -54,13 +89,12 @@ top_n = st.slider("How many top recipients to show?", min_value=5, max_value=20,
 query_recipients = f"""
     SELECT RECIPNAME, SUM(AMNT) AS total_amt
     FROM contrib
-    WHERE OFFICECD = '{office}'
+    WHERE OFFICECD = '{office}' OR OFFICECD = '{office}{office}'
     GROUP BY RECIPNAME
     ORDER BY total_amt DESC
     LIMIT {top_n}
 """
 by_recipient = con.execute(query_recipients).df()
-# by_recipient = by_recipient.iloc[::-1]
 st.subheader("Top recipients by total amount")
 st.bar_chart(by_recipient.set_index("RECIPNAME")["total_amt"], sort="-total_amt")
 
