@@ -1,23 +1,3 @@
-# import pathlib
-
-# src = pathlib.Path("2009_Contributions.csv")
-# dst = pathlib.Path("2009_Contributions_.csv")
-
-# # Try common legacy encodings in order
-# for enc in ("utf-8-sig", "latin-1", "cp1252", "utf-16", "utf-16-le", "utf-16-be"):
-#     try:
-#         text = src.read_text(encoding=enc)
-#         dst.write_text(text, encoding="utf-8")
-#         print(f"Decoded with {enc} → wrote UTF-8")
-#         break
-#     except UnicodeDecodeError:
-#         continue
-# else:
-#     raise RuntimeError("Could not decode file with common encodings")
-
-
-
-
 import streamlit as st
 import pandas as pd
 import duckdb
