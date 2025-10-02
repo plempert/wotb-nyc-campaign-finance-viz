@@ -2,25 +2,38 @@ import streamlit as st
 import pandas as pd
 import duckdb
 
-# contributions_url = "2025_Contributions.csv"
-# expenditures_url = "2025_Expenditures.csv"
-# intermediaries_url = ""
-# public_funds_payments = ""
-# financial_analysts = ""
+##############
+# SELECTIONS #
+##############
 
-# st.write("Contributions")
-# contributions = pd.read_csv(contributions_url)
-# st.dataframe(contributions)
+year = st.selectbox(
+    "Select year",
+    ("2025", "2023", "2017"),
+)
 
-# st.write("Expenditures")
-# expenditures = pd.read_csv(expenditures_url)
-# st.dataframe(expenditures)
+offices = {
+    "1": "Mayor",
+    "2": "Public Advocate",
+    "3": "Comptroller",
+    "4": "Borough President",
+    "5": "City Council",
+    "IS": "PACs, LLCs, and other Independent Spenders"
+}
 
+office = st.selectbox(
+    "Select office",
+    list(offices.keys()),
+    format_func=lambda x: offices[x]
+)
 
 st.set_page_config(page_title="NYC Campaign Finance")
 
+###################
+# CONNECT TO FILE #
+###################
+
 con = duckdb.connect()
-contributions_url = "2025_Contributions.csv"
+contributions_url = f"{year}_Contributions.csv"
 
 con.execute(f"""
     CREATE OR REPLACE TABLE contrib AS 
@@ -28,17 +41,20 @@ con.execute(f"""
 """)
 
 
-# st.dataframe(con.execute("select * from contrib").df())
+###################################
+# TOP CONTRIBUTIONS BY RECIPIENT #
+###################################
 
 st.title("Top Contributions by Recipient")
 
 # ---- Controls ----
-top_n = st.slider("How many top recipients to show?", min_value=5, max_value=50, value=10, step=5)
+top_n = st.slider("How many top recipients to show?", min_value=5, max_value=20, value=5, step=5)
 
 # ---- Query top recipients ----
 query_recipients = f"""
     SELECT RECIPNAME, SUM(AMNT) AS total_amt
     FROM contrib
+    WHERE OFFICECD = '{office}'
     GROUP BY RECIPNAME
     ORDER BY total_amt DESC
     LIMIT {top_n}
@@ -52,22 +68,4 @@ st.bar_chart(by_recipient.set_index("RECIPNAME")["total_amt"], sort="-total_amt"
 with st.expander("See data table"):
     st.dataframe(by_recipient.style.format({'total_amt': "{:,.2f}"}), use_container_width=True)
 
-# ---- Drilldown: top contributors within a selected recipient ----
-st.subheader("Drill down: top contributors within a recipient")
-recipient_choice = st.selectbox("Choose a recipient", options=by_recipient["RECIPNAME"].tolist())
 
-query_contributors = f"""
-    SELECT NAME, SUM(AMNT) AS total_amt
-    FROM contrib
-    WHERE RECIPNAME = ?
-    GROUP BY NAME
-    ORDER BY total_amt DESC
-    LIMIT 10
-"""
-by_contributor = con.execute(query_contributors, [recipient_choice]).df()
-
-st.subheader(f"Top contributors to {recipient_choice}")
-st.bar_chart(by_contributor.set_index("NAME")["total_amt"], sort="-total_amt")
-# Optional table for detail
-with st.expander("See data table"):
-    st.dataframe(by_contributor.style.format({'total_amt': "{:,.2f}"}), use_container_width=True)
